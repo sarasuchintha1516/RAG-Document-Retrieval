@@ -1,0 +1,53 @@
+
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.documents import Document
+from langchain_core.vectorstores import FAISS
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+from langchain_community.embeddings import FakeEmbeddings
+from langchain_community.chat_models.fake import FakeListChatModel
+
+# 1. Sample documents (indexed text)
+documents = [
+    Document(page_content="Climate change causes global warming."),
+    Document(page_content="Burning fossil fuels increases greenhouse gases."),
+    Document(page_content="Planting trees helps reduce carbon dioxide.")
+]
+
+# 2. Create a FAISS vector store
+embeddings = FakeEmbeddings(size=10)
+vectorstore = FAISS.from_documents(documents, embeddings)
+retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+
+# 3. Create a prompt
+prompt = ChatPromptTemplate.from_template("""
+Answer the question using only the context below.
+
+Context: {context}
+Question: {question}
+Answer:
+""")
+
+# 4. Create a simple RAG chain using LCEL
+def format_docs(docs):
+    return "\n".join(doc.page_content for doc in docs)
+
+llm = FakeListChatModel(responses=[
+    "Climate change is mainly caused by greenhouse gases from human activities."
+])
+
+rag_chain = (
+    {
+        "context": retriever | format_docs,
+        "question": RunnablePassthrough()
+    }
+    | prompt
+    | llm
+    | StrOutputParser()
+)
+
+# 5. Ask a question
+question = input("Ask a question: ")
+answer = rag_chain.invoke(question)
+
+print("\nAnswer:", answer)
